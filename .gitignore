@@ -1,0 +1,7 @@
+.env
+Groq.txt
+__pycache__/
+.streamlit/*
+!.streamlit/config.toml
+*.log
+tests/tmp*/

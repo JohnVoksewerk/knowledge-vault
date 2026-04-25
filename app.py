@@ -21,8 +21,10 @@ LOG_FILE = LOG_DIR / "app.log"
 DEFAULT_VAULT_PATH = r"C:\Obsidian\obsidian-knowledge-vault"
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 DEFAULT_EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_UPLOAD_TYPES = ("pdf", "txt", "md")
 MAX_UPLOAD_SIZE_MB = 10
+MAX_PROMPT_CHARS = 4000
 CHAT_MODES = ("Strategisk Sparring", "Case Analyse (Audit)")
 VOKSEWERK_GREEN = "#9ac31c"
 VOKSEWERK_NAVY = "#002a3a"
@@ -36,6 +38,7 @@ class AppConfig:
     embed_model: str
     max_upload_size_mb: int
     log_level: str
+    max_prompt_chars: int
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,11 @@ def env_int_or_default(name: str, default: int) -> int:
         return default
 
 
+def normalize_log_level(value: str) -> str:
+    normalized = value.strip().upper()
+    return normalized if normalized in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"} else DEFAULT_LOG_LEVEL
+
+
 def load_config() -> AppConfig:
     load_dotenv()
     return AppConfig(
@@ -87,8 +95,9 @@ def load_config() -> AppConfig:
         vault_path=env_or_default("VAULT_PATH", DEFAULT_VAULT_PATH),
         groq_model=env_or_default("GROQ_MODEL", DEFAULT_MODEL),
         embed_model=env_or_default("EMBED_MODEL", DEFAULT_EMBED_MODEL),
-        max_upload_size_mb=env_int_or_default("MAX_UPLOAD_SIZE_MB", MAX_UPLOAD_SIZE_MB),
-        log_level=env_or_default("LOG_LEVEL", "INFO"),
+        max_upload_size_mb=max(1, env_int_or_default("MAX_UPLOAD_SIZE_MB", MAX_UPLOAD_SIZE_MB)),
+        log_level=normalize_log_level(env_or_default("LOG_LEVEL", DEFAULT_LOG_LEVEL)),
+        max_prompt_chars=max(250, env_int_or_default("MAX_PROMPT_CHARS", MAX_PROMPT_CHARS)),
     )
 
 
@@ -140,6 +149,10 @@ def maybe_reset_chat_for_mode(app_mode: str) -> None:
         st.session_state.last_mode = app_mode
 
 
+def clear_chat_history() -> None:
+    st.session_state.messages = []
+
+
 def render_sidebar(config: AppConfig) -> tuple[str, str, object | None]:
     api_key = config.api_key
     with st.sidebar:
@@ -153,7 +166,9 @@ def render_sidebar(config: AppConfig) -> tuple[str, str, object | None]:
         app_mode = st.selectbox("Vaelg modul", CHAT_MODES)
         st.caption(f"Vault: `{config.vault_path}`")
         st.caption(f"Maks filstoerrelse: {config.max_upload_size_mb} MB")
+        st.caption(f"Maks promptlaengde: {config.max_prompt_chars} tegn")
         st.caption(f"Logniveau: {config.log_level}")
+        st.button("Ryd chat", on_click=clear_chat_history)
         st.divider()
 
         uploaded_file = None
@@ -284,12 +299,14 @@ INSTRUKSER:
 """.strip()
 
 
-def validate_prompt(prompt: str) -> str:
+def validate_prompt(prompt: str, max_prompt_chars: int) -> str:
     cleaned = prompt.strip()
     if not cleaned:
         raise ValueError("Prompten er tom.")
     if len(cleaned) < 3:
         raise ValueError("Prompten er for kort til at give et brugbart svar.")
+    if len(cleaned) > max_prompt_chars:
+        raise ValueError(f"Prompten er for lang. Maks laengde er {max_prompt_chars} tegn.")
     return cleaned
 
 
@@ -350,7 +367,7 @@ def handle_chat(app_mode: str, uploaded_file, vault_index, config: AppConfig) ->
         return
 
     try:
-        prompt = validate_prompt(prompt)
+        prompt = validate_prompt(prompt, config.max_prompt_chars)
     except ValueError as exc:
         st.warning(str(exc))
         return

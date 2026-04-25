@@ -29,6 +29,8 @@ class LoadConfigTests(unittest.TestCase):
                 "GROQ_MODEL": "",
                 "EMBED_MODEL": "",
                 "MAX_UPLOAD_SIZE_MB": "10",
+                "MAX_PROMPT_CHARS": "4000",
+                "LOG_LEVEL": "invalid",
             },
             clear=False,
         ):
@@ -39,6 +41,7 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.groq_model, app.DEFAULT_MODEL)
         self.assertEqual(config.embed_model, app.DEFAULT_EMBED_MODEL)
         self.assertEqual(config.max_upload_size_mb, 10)
+        self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.log_level, "INFO")
 
     def test_validate_environment_reports_missing_key_and_missing_vault(self):
@@ -49,6 +52,7 @@ class LoadConfigTests(unittest.TestCase):
             embed_model=app.DEFAULT_EMBED_MODEL,
             max_upload_size_mb=10,
             log_level="INFO",
+            max_prompt_chars=4000,
         )
 
         issues = app.validate_environment(config, "")
@@ -97,11 +101,15 @@ class UploadedCaseTests(unittest.TestCase):
 class RuntimeGuardTests(unittest.TestCase):
     def test_validate_prompt_rejects_blank_prompt(self):
         with self.assertRaisesRegex(ValueError, "tom"):
-            app.validate_prompt("   ")
+            app.validate_prompt("   ", 4000)
 
     def test_validate_prompt_rejects_short_prompt(self):
         with self.assertRaisesRegex(ValueError, "for kort"):
-            app.validate_prompt("ok")
+            app.validate_prompt("ok", 4000)
+
+    def test_validate_prompt_rejects_long_prompt(self):
+        with self.assertRaisesRegex(ValueError, "for lang"):
+            app.validate_prompt("a" * 4010, 4000)
 
     def test_build_status_reflects_current_state(self):
         config = app.AppConfig(
@@ -111,6 +119,7 @@ class RuntimeGuardTests(unittest.TestCase):
             embed_model=app.DEFAULT_EMBED_MODEL,
             max_upload_size_mb=10,
             log_level="INFO",
+            max_prompt_chars=4000,
         )
 
         status = app.build_status(config, "secret", "Case Analyse (Audit)", uploaded_file=None)

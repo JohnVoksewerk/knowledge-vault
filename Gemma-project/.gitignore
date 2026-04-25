@@ -1,5 +1,0 @@
-.env
-Groq.txt
-__pycache__/
-.streamlit/
-*.log
