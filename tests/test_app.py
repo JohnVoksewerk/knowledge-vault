@@ -87,7 +87,7 @@ class UploadedCaseTests(unittest.TestCase):
     def test_load_vault_documents_reads_markdown_files(self):
         vault_path = r"C:\vault"
         file_path = os.path.join(vault_path, "note.md")
-        with patch("app.glob.glob", return_value=[file_path]), patch(
+        with patch("assistant_app.services.glob.glob", return_value=[file_path]), patch(
             "builtins.open",
             mock_open(read_data="Indhold fra vault"),
         ):
@@ -122,7 +122,13 @@ class RuntimeGuardTests(unittest.TestCase):
             max_prompt_chars=4000,
         )
 
-        status = app.build_status(config, "secret", "Case Analyse (Audit)", uploaded_file=None)
+        status = app.build_status(
+            config.vault_path,
+            "secret",
+            "Case Analyse (Audit)",
+            uploaded_file=None,
+            vault_document_count=0,
+        )
 
         self.assertTrue(status.api_key_configured)
         self.assertFalse(status.vault_path_exists)

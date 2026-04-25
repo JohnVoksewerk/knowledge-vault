@@ -1,4 +1,4 @@
-from assistant_app import (
+from assistant_app.config import (
     APP_DIR,
     CHAT_MODES,
     DEFAULT_EMBED_MODEL,
@@ -13,29 +13,30 @@ from assistant_app import (
     VOKSEWERK_GREEN,
     VOKSEWERK_NAVY,
     AppConfig,
-    AppStatus,
-    build_audit_prompt,
-    build_status,
-    build_vault_index,
-    clear_chat_history,
     configure_logging,
+    load_config,
+    normalize_log_level,
+)
+from assistant_app.services import (
+    build_audit_prompt,
+    build_vault_index,
     configure_models,
     count_vault_documents,
-    ensure_session_state,
-    get_chat_readiness,
-    load_config,
     load_vault_documents,
-    main,
-    maybe_reset_chat_for_mode,
-    normalize_log_level,
     read_uploaded_case,
     run_case_audit,
     run_strategic_query,
     validate_environment,
     validate_prompt,
+)
+from assistant_app.state import (
+    AppStatus,
+    build_status,
+    clear_chat_history,
+    ensure_session_state,
+    get_chat_readiness,
+    maybe_reset_chat_for_mode,
     with_status,
 )
+from assistant_app.ui import main
 
-
-if __name__ == "__main__":
-    main()
