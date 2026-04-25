@@ -5,6 +5,7 @@ from unittest.mock import mock_open, patch
 from llama_index.core import Document
 
 import app
+from assistant_app.startup import StartupResult
 
 
 class UploadedFileStub:
@@ -87,7 +88,7 @@ class UploadedCaseTests(unittest.TestCase):
     def test_load_vault_documents_reads_markdown_files(self):
         vault_path = r"C:\vault"
         file_path = os.path.join(vault_path, "note.md")
-        with patch("assistant_app.services.glob.glob", return_value=[file_path]), patch(
+        with patch("assistant_app.vault.glob.glob", return_value=[file_path]), patch(
             "builtins.open",
             mock_open(read_data="Indhold fra vault"),
         ):
@@ -172,6 +173,53 @@ class RuntimeGuardTests(unittest.TestCase):
         self.assertTrue(updated.chat_ready)
         self.assertEqual(updated.startup_error, "boom")
         self.assertEqual(updated.vault_document_count, 12)
+
+
+class StartupTests(unittest.TestCase):
+    def test_initialize_app_returns_issues_without_starting_models(self):
+        config = app.AppConfig(
+            api_key="",
+            vault_path=r"C:\does-not-exist",
+            groq_model=app.DEFAULT_MODEL,
+            embed_model=app.DEFAULT_EMBED_MODEL,
+            max_upload_size_mb=10,
+            log_level="INFO",
+            max_prompt_chars=4000,
+        )
+
+        with patch("assistant_app.startup.configure_models") as configure_models_mock:
+            result = app.initialize_app(config, "")
+
+        self.assertIsInstance(result, StartupResult)
+        self.assertEqual(len(result.issues), 2)
+        self.assertIsNone(result.vault_index)
+        self.assertIsNone(result.startup_error)
+        configure_models_mock.assert_not_called()
+
+    def test_initialize_app_captures_startup_errors(self):
+        config = app.AppConfig(
+            api_key="secret",
+            vault_path=r"C:\vault",
+            groq_model=app.DEFAULT_MODEL,
+            embed_model=app.DEFAULT_EMBED_MODEL,
+            max_upload_size_mb=10,
+            log_level="INFO",
+            max_prompt_chars=4000,
+        )
+
+        with patch("assistant_app.startup.validate_environment", return_value=[]), patch(
+            "assistant_app.startup.count_vault_documents",
+            return_value=3,
+        ), patch(
+            "assistant_app.startup.configure_models",
+            side_effect=RuntimeError("startup broke"),
+        ):
+            result = app.initialize_app(config, "secret")
+
+        self.assertEqual(result.issues, [])
+        self.assertIsNone(result.vault_index)
+        self.assertEqual(result.startup_error, "startup broke")
+        self.assertEqual(result.vault_document_count, 3)
 
 
 if __name__ == "__main__":

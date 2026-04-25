@@ -12,15 +12,8 @@ from assistant_app.config import (
     configure_logging,
     load_config,
 )
-from assistant_app.services import (
-    build_vault_index,
-    configure_models,
-    count_vault_documents,
-    run_case_audit,
-    run_strategic_query,
-    validate_environment,
-    validate_prompt,
-)
+from assistant_app.audit import run_case_audit
+from assistant_app.startup import initialize_app
 from assistant_app.state import (
     AppStatus,
     build_status,
@@ -30,6 +23,8 @@ from assistant_app.state import (
     maybe_reset_chat_for_mode,
     with_status,
 )
+from assistant_app.validation import validate_prompt
+from assistant_app.vault import run_strategic_query
 
 
 LOGGER = logging.getLogger(__name__)
@@ -37,6 +32,8 @@ LOGGER = logging.getLogger(__name__)
 
 @st.cache_resource(show_spinner="Indlaeser Obsidian Vault...")
 def load_cached_vault_index(vault_path: str, api_key: str, groq_model: str, embed_model: str):
+    from assistant_app.vault import build_vault_index
+
     return build_vault_index(vault_path, api_key, groq_model, embed_model)
 
 
@@ -190,35 +187,31 @@ def main() -> None:
     api_key, app_mode, uploaded_file = render_sidebar(config)
     maybe_reset_chat_for_mode(app_mode)
 
-    vault_document_count = count_vault_documents(config.vault_path)
+    startup = initialize_app(config, api_key)
+    if not startup.issues and not startup.startup_error:
+        vault_index = load_cached_vault_index(
+            config.vault_path,
+            api_key,
+            config.groq_model,
+            config.embed_model,
+        )
+        startup = type(startup)(
+            issues=startup.issues,
+            vault_index=vault_index,
+            startup_error=startup.startup_error,
+            vault_document_count=startup.vault_document_count,
+        )
     status = build_status(
         config.vault_path,
         api_key,
         app_mode,
         uploaded_file,
-        vault_document_count,
+        startup.vault_document_count,
     )
 
-    issues = validate_environment(config, api_key)
-    vault_index = None
-    startup_error = None
-    if not issues:
-        try:
-            configure_models(config, api_key)
-            vault_index = load_cached_vault_index(
-                config.vault_path,
-                api_key,
-                config.groq_model,
-                config.embed_model,
-            )
-        except Exception as exc:
-            startup_error = str(exc)
-            LOGGER.exception("Fejl under startup og indeksinitialisering")
+    chat_ready, _ = get_chat_readiness(app_mode, startup.vault_index, uploaded_file)
+    status = with_status(status, chat_ready=chat_ready, startup_error=startup.startup_error)
 
-    chat_ready, _ = get_chat_readiness(app_mode, vault_index, uploaded_file)
-    status = with_status(status, chat_ready=chat_ready, startup_error=startup_error)
-
-    render_status(config, issues, vault_index, startup_error)
+    render_status(config, startup.issues, startup.vault_index, startup.startup_error)
     render_health_panel(status)
-    handle_chat(app_mode, uploaded_file, vault_index, config)
-
+    handle_chat(app_mode, uploaded_file, startup.vault_index, config)

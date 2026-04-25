@@ -29,6 +29,7 @@ from assistant_app.services import (
     validate_environment,
     validate_prompt,
 )
+from assistant_app.startup import StartupResult, initialize_app
 from assistant_app.state import (
     AppStatus,
     build_status,
@@ -39,4 +40,3 @@ from assistant_app.state import (
     with_status,
 )
 from assistant_app.ui import main
-
