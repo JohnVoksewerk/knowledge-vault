@@ -129,6 +129,43 @@ class RuntimeGuardTests(unittest.TestCase):
         self.assertEqual(status.vault_document_count, 0)
         self.assertEqual(status.active_mode, "Case Analyse (Audit)")
         self.assertFalse(status.upload_ready)
+        self.assertFalse(status.chat_ready)
+        self.assertIsNone(status.startup_error)
+
+    def test_get_chat_readiness_requires_vault_index(self):
+        chat_ready, reason = app.get_chat_readiness("Strategisk Sparring", None, uploaded_file=None)
+
+        self.assertFalse(chat_ready)
+        self.assertIn("vault-indekset", reason)
+
+    def test_get_chat_readiness_requires_upload_for_audit(self):
+        chat_ready, reason = app.get_chat_readiness("Case Analyse (Audit)", object(), uploaded_file=None)
+
+        self.assertFalse(chat_ready)
+        self.assertIn("Upload en kundecase", reason)
+
+    def test_get_chat_readiness_allows_valid_audit_state(self):
+        chat_ready, reason = app.get_chat_readiness("Case Analyse (Audit)", object(), uploaded_file=object())
+
+        self.assertTrue(chat_ready)
+        self.assertIsNone(reason)
+
+    def test_with_status_updates_selected_fields(self):
+        original = app.AppStatus(
+            api_key_configured=True,
+            vault_path_exists=True,
+            vault_document_count=12,
+            active_mode="Strategisk Sparring",
+            upload_ready=False,
+            chat_ready=False,
+            startup_error=None,
+        )
+
+        updated = app.with_status(original, chat_ready=True, startup_error="boom")
+
+        self.assertTrue(updated.chat_ready)
+        self.assertEqual(updated.startup_error, "boom")
+        self.assertEqual(updated.vault_document_count, 12)
 
 
 if __name__ == "__main__":
